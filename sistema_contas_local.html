@@ -1,0 +1,1117 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema Contas - LB Florestal</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.5.0/pdfmake.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.5.0/vfs_fonts.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 10px;
+        }
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        header h1 { font-size: 24px; }
+        .sync-info { font-size: 14px; background: rgba(255,255,255,0.2); padding: 8px 15px; border-radius: 4px; }
+        .tabs {
+            display: flex;
+            background: linear-gradient(90deg, #f5f5f5 0%, #efefef 100%);
+            border-bottom: 3px solid #ddd;
+            flex-wrap: wrap;
+            overflow-x: auto;
+        }
+        .tab-btn {
+            flex: 1;
+            min-width: 100px;
+            padding: 12px;
+            background: #f5f5f5;
+            border: none;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s;
+            white-space: nowrap;
+            color: #333;
+        }
+        .tab-btn:nth-child(1) { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
+        .tab-btn:nth-child(2) { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; }
+        .tab-btn:nth-child(3) { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; }
+        .tab-btn:nth-child(4) { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: white; }
+        .tab-btn:nth-child(5) { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: white; }
+        .tab-content { display: none; padding: 20px; }
+        .tab-content.active { display: block; }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 4px; font-weight: 500; color: #333; font-size: 13px; }
+        input, select, textarea { width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 13px; }
+        input:focus, select:focus { outline: none; border-color: #667eea; box-shadow: 0 0 5px rgba(102, 126, 234, 0.3); }
+        .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+        button { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 10px 15px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 500; }
+        button:hover { transform: translateY(-2px); }
+        .btn-small { padding: 5px 10px; font-size: 11px; margin: 2px; }
+        .btn-delete { background: #e74c3c; }
+        .btn-pagar { background: #27ae60; }
+        .table-responsive { overflow-x: auto; margin-top: 15px; }
+        table { width: 100%; border-collapse: collapse; font-size: 12px; }
+        th { background: #667eea; color: white; padding: 8px; text-align: left; font-weight: 600; }
+        td { padding: 8px; border-bottom: 1px solid #ddd; }
+        tr:hover { background: #f9f9f9; }
+        .currency { color: #27ae60; font-weight: 600; text-align: right; }
+        .status-pago { background: #d4edda; color: #155724; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+        .status-pendente { background: #fff3cd; color: #856404; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 600; }
+        .dashboard-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 15px; margin-bottom: 20px; }
+        .card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 15px; border-radius: 8px; }
+        .card h3 { font-size: 12px; opacity: 0.9; margin-bottom: 8px; }
+        .card .value { font-size: 20px; font-weight: bold; }
+        h2 { color: #333; margin-bottom: 15px; font-size: 18px; }
+        .info-box { background: #f0f7ff; border-left: 4px solid #667eea; padding: 12px; border-radius: 4px; margin-bottom: 15px; font-size: 13px; }
+        .no-data { text-align: center; padding: 20px; color: #999; }
+        .total-row { background: #f0f0f0; font-weight: bold; }
+        .filtros-container { background: #f5f5f5; padding: 15px; border-radius: 4px; margin-bottom: 15px; }
+        .filtro-item { display: inline-block; margin-right: 15px; margin-bottom: 10px; }
+        .filtro-item label { margin-bottom: 2px; }
+        .filtro-item input, .filtro-item select { max-width: 150px; }
+        .modal { display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.5); overflow-y: auto; }
+        .modal-content { background-color: white; margin: 3% auto; padding: 20px; border-radius: 8px; width: 90%; max-width: 600px; }
+        .modal-header { font-size: 16px; font-weight: bold; margin-bottom: 15px; color: #333; }
+        .close { color: #aaa; float: right; font-size: 28px; cursor: pointer; }
+        .close:hover { color: #000; }
+        .sync-buttons { margin: 20px 0; display: flex; gap: 10px; flex-wrap: wrap; }
+        .sync-buttons button { margin: 0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div>
+                <h1>💼 Sistema de Contas a Pagar - LB Florestal</h1>
+                <p>Gerenciamento com Sincronização Manual</p>
+            </div>
+            <div class="sync-info">
+                <strong>💾 Dados salvos localmente</strong><br>
+                Exporte e compartilhe com seu colega
+            </div>
+        </header>
+
+        <div class="tabs">
+            <button class="tab-btn active" onclick="mostrarAba('dashboard')">📊 Dashboard</button>
+            <button class="tab-btn" onclick="mostrarAba('adicionar')">📝 Adicionar</button>
+            <button class="tab-btn" onclick="mostrarAba('consultar')">🔍 Consultar</button>
+            <button class="tab-btn" onclick="mostrarAba('relatorios')">📋 Relatórios</button>
+            <button class="tab-btn" onclick="mostrarAba('fornecedores')">🏢 Fornecedores</button>
+            <button class="tab-btn" onclick="mostrarAba('empresas')">🏭 Empresas</button>
+            <button class="tab-btn" onclick="mostrarAba('sincronizar')">🔄 Sincronizar</button>
+        </div>
+
+        <!-- DASHBOARD -->
+        <div id="dashboard" class="tab-content active">
+            <h2>📊 Dashboard</h2>
+            <div class="dashboard-cards">
+                <div class="card">
+                    <h3>Total de Contas</h3>
+                    <div class="value" id="totalContas">0</div>
+                </div>
+                <div class="card">
+                    <h3>Total em Aberto</h3>
+                    <div class="value" id="totalAberto">R$ 0,00</div>
+                </div>
+                <div class="card">
+                    <h3>Total Pago</h3>
+                    <div class="value" id="totalPago">R$ 0,00</div>
+                </div>
+            </div>
+            <h3>Próximos 15 dias</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Vencimento</th>
+                            <th>Fornecedor</th>
+                            <th>Tipo</th>
+                            <th>Valor</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoProximos">
+                        <tr><td colspan="5" class="no-data">Nenhuma</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ADICIONAR -->
+        <div id="adicionar" class="tab-content">
+            <h2>📝 Adicionar Conta</h2>
+            <div class="info-box">
+                Preencha os dados da conta. Os dados são salvos localmente no seu navegador.
+            </div>
+            <form onsubmit="adicionarConta(event)">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Empresa *</label>
+                        <select id="selectEmpresa" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Fornecedor *</label>
+                        <select id="selectFornecedor" required>
+                            <option value="">Selecione...</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Tipo *</label>
+                        <select id="tipo" required>
+                            <option value="">Selecione...</option>
+                            <option value="Material">Material</option>
+                            <option value="Serviço">Serviço</option>
+                            <option value="Fixa">Fixa</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Número NF *</label>
+                        <input type="text" id="numeroNF" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Valor *</label>
+                        <input type="text" id="valor" placeholder="1000,00" oninput="formatarMoeda(this)" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Vencimento (DD/MM/AAAA) *</label>
+                        <input type="text" id="vencimento" placeholder="DD/MM/AAAA" oninput="formatarData(this)" maxlength="10" required>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>É Parcelada?</label>
+                        <select id="parcelada">
+                            <option value="não">Não</option>
+                            <option value="sim">Sim</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Observações</label>
+                    <textarea id="observacoes" rows="2"></textarea>
+                </div>
+                <button type="submit" style="width: 100%;">💾 Salvar Conta</button>
+            </form>
+        </div>
+
+        <!-- CONSULTAR -->
+        <div id="consultar" class="tab-content">
+            <h2>🔍 Consultar Contas</h2>
+            <div class="filtros-container">
+                <div class="filtro-item">
+                    <label>De:</label>
+                    <input type="text" id="filtroDataDe" placeholder="DD/MM/AAAA" maxlength="10" oninput="formatarData(this)">
+                </div>
+                <div class="filtro-item">
+                    <label>Até:</label>
+                    <input type="text" id="filtroDataAte" placeholder="DD/MM/AAAA" maxlength="10" oninput="formatarData(this)">
+                </div>
+                <div class="filtro-item">
+                    <label>Status:</label>
+                    <select id="filtroStatus">
+                        <option value="">Todos</option>
+                        <option value="pago">✓ Pago</option>
+                        <option value="pendente">⏳ Pendente</option>
+                    </select>
+                </div>
+                <div class="filtro-item">
+                    <button onclick="consultarContas()">🔍 Filtrar</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Vencimento</th>
+                            <th>Fornecedor</th>
+                            <th>Tipo</th>
+                            <th>NF</th>
+                            <th>Valor</th>
+                            <th>Parcelas</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoContas">
+                        <tr><td colspan="8" class="no-data">Clique em Filtrar</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- RELATÓRIOS -->
+        <div id="relatorios" class="tab-content">
+            <h2>📋 Relatórios</h2>
+            <div class="filtros-container">
+                <div class="filtro-item">
+                    <label>De:</label>
+                    <input type="text" id="relDataDe" placeholder="DD/MM/AAAA" maxlength="10" oninput="formatarData(this)">
+                </div>
+                <div class="filtro-item">
+                    <label>Até:</label>
+                    <input type="text" id="relDataAte" placeholder="DD/MM/AAAA" maxlength="10" oninput="formatarData(this)">
+                </div>
+                <div class="filtro-item">
+                    <button onclick="gerarRelatorio('pagar')">📄 A Pagar</button>
+                    <button onclick="gerarRelatorio('pago')">✅ Pago</button>
+                </div>
+            </div>
+
+            <div style="margin-bottom: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
+                <button onclick="imprimirRelatorio('pagar')" class="btn-pagar">🖨️ Imprimir (A Pagar)</button>
+                <button onclick="gerarPDF('pagar')" class="btn-pagar">📥 PDF (A Pagar)</button>
+                <button onclick="imprimirRelatorio('pago')" class="btn-pagar">🖨️ Imprimir (Pago)</button>
+                <button onclick="gerarPDF('pago')" class="btn-pagar">📥 PDF (Pago)</button>
+            </div>
+
+            <h3>Contas a Pagar</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Vencimento</th>
+                            <th>Fornecedor</th>
+                            <th>Tipo</th>
+                            <th>NF</th>
+                            <th>Valor</th>
+                            <th>Parcelas</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoRelatorioAPagar">
+                        <tr><td colspan="6" class="no-data">Gere um relatório</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <h3 style="margin-top: 30px;">Contas Pagas</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Vencimento</th>
+                            <th>Fornecedor</th>
+                            <th>Tipo</th>
+                            <th>NF</th>
+                            <th>Valor</th>
+                            <th>Pago em</th>
+                            <th>Parcelas</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoRelatorioPago">
+                        <tr><td colspan="7" class="no-data">Gere um relatório</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- FORNECEDORES -->
+        <div id="fornecedores" class="tab-content">
+            <h2>🏢 Fornecedores</h2>
+            <div class="info-box">
+                Cadastre seus fornecedores aqui. Depois você seleciona ao adicionar uma conta.
+            </div>
+            <div style="margin-bottom: 20px;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nome do Fornecedor *</label>
+                        <input type="text" id="novoFornecedor" placeholder="Ex: Fornecedor XYZ">
+                    </div>
+                    <div class="form-group">
+                        <label>CNPJ</label>
+                        <input type="text" id="cnpjFornecedor" placeholder="00.000.000/0000-00">
+                    </div>
+                </div>
+                <button onclick="adicionarFornecedor()" style="width: 100%;">➕ Adicionar Fornecedor</button>
+            </div>
+            <h3>Fornecedores Cadastrados</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>CNPJ</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoFornecedores">
+                        <tr><td colspan="3" class="no-data">Nenhum fornecedor cadastrado</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- EMPRESAS -->
+        <div id="empresas" class="tab-content">
+            <h2>🏭 Empresas</h2>
+            <div class="info-box">
+                Cadastre as empresas/centros de custo aqui.
+            </div>
+            <div style="margin-bottom: 20px;">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Nome da Empresa *</label>
+                        <input type="text" id="novaEmpresa" placeholder="Ex: LB Florestal">
+                    </div>
+                    <div class="form-group">
+                        <label>CNPJ</label>
+                        <input type="text" id="cnpjEmpresa" placeholder="00.000.000/0000-00">
+                    </div>
+                </div>
+                <button onclick="adicionarEmpresa()" style="width: 100%;">➕ Adicionar Empresa</button>
+            </div>
+            <h3>Empresas Cadastradas</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>CNPJ</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoEmpresas">
+                        <tr><td colspan="3" class="no-data">Nenhuma empresa cadastrada</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div id="sincronizar" class="tab-content">
+            <h2>🔄 Sincronizar Dados</h2>
+            <div class="info-box">
+                <strong>Como funciona:</strong><br>
+                1. Clique em "Exportar" para baixar seus dados<br>
+                2. Envie o arquivo JSON para seu colega via WhatsApp/Email<br>
+                3. Seu colega clica em "Importar" e seleciona o arquivo<br>
+                4. Pronto! Os dados estão sincronizados 🎉
+            </div>
+
+            <div class="sync-buttons">
+                <button onclick="exportarDados()">📥 Exportar Dados (JSON)</button>
+                <button onclick="exportarExcel()">📊 Exportar Excel</button>
+                <button onclick="document.getElementById('importFile').click()">📤 Importar Dados</button>
+                <input type="file" id="importFile" accept=".json,.xlsx,.xls" style="display:none" onchange="importarDados()">
+                <button onclick="limparDados()" class="btn-delete">🗑️ Limpar Todos os Dados</button>
+            </div>
+
+            <h3>Dados Atuais</h3>
+            <p id="statusDados">Carregando...</p>
+        </div>
+    </div>
+
+    <!-- MODAL PAGAMENTO -->
+    <div id="modalPagamento" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="fecharModal('modalPagamento')">&times;</span>
+            <div class="modal-header">✅ Registrar Pagamento</div>
+            <form onsubmit="salvarPagamento(event)">
+                <div class="form-group">
+                    <label>Conta</label>
+                    <input type="text" id="pagmentoConta" disabled>
+                </div>
+                <div class="form-group">
+                    <label>Valor</label>
+                    <input type="text" id="pagamentoValor" disabled>
+                </div>
+                <div class="form-group">
+                    <label>Data do Pagamento (DD/MM/AAAA) *</label>
+                    <input type="text" id="dataPagamento" placeholder="25/11/2025" maxlength="10" oninput="formatarData(this)" required>
+                </div>
+                <input type="hidden" id="idContaPagamento">
+                <button type="submit" style="width: 100%;">✅ Confirmar</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        // ===== ARMAZENAMENTO LOCAL =====
+        function salvarContas(contas) {
+            localStorage.setItem('contas_lbflorestal', JSON.stringify(contas));
+        }
+
+        function obterContas() {
+            const dados = localStorage.getItem('contas_lbflorestal');
+            return dados ? JSON.parse(dados) : [];
+        }
+
+        // ===== FORMATAÇÃO =====
+        function formatarMoeda(input) {
+            let value = input.value.replace(/\D/g, '');
+            if (value === '') return;
+            value = (value / 100).toFixed(2).replace('.', ',');
+            value = value.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+            input.value = value;
+        }
+
+        function formatarData(input) {
+            let value = input.value.replace(/\D/g, '');
+            if (value.length <= 2) {
+                input.value = value;
+            } else if (value.length <= 4) {
+                input.value = value.substring(0, 2) + '/' + value.substring(2);
+            } else {
+                input.value = value.substring(0, 2) + '/' + value.substring(2, 4) + '/' + value.substring(4, 8);
+            }
+        }
+
+        // ===== ABAS =====
+        function mostrarAba(abaId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+            document.getElementById(abaId).classList.add('active');
+            event.target.classList.add('active');
+
+            if (abaId === 'dashboard') renderizarDashboard();
+            if (abaId === 'sincronizar') atualizarStatusSync();
+            if (abaId === 'adicionar') atualizarSelects();
+            if (abaId === 'fornecedores') renderizarFornecedores();
+            if (abaId === 'empresas') renderizarEmpresas();
+        }
+
+        function atualizarSelects() {
+            const empresas = obterEmpresas();
+            const fornecedores = obterFornecedores();
+
+            const selectEmpresa = document.getElementById('selectEmpresa');
+            selectEmpresa.innerHTML = '<option value="">Selecione...</option>' + 
+                empresas.map(e => `<option value="${e.nome}">${e.nome}</option>`).join('');
+
+            const selectFornecedor = document.getElementById('selectFornecedor');
+            selectFornecedor.innerHTML = '<option value="">Selecione...</option>' + 
+                fornecedores.map(f => `<option value="${f.nome}">${f.nome}</option>`).join('');
+        }
+
+        // ===== CONTAS =====
+        function adicionarConta(event) {
+            event.preventDefault();
+
+            const empresa = document.getElementById('selectEmpresa').value;
+            const fornecedor = document.getElementById('selectFornecedor').value;
+            const tipo = document.getElementById('tipo').value;
+            const numeroNF = document.getElementById('numeroNF').value;
+            const valorStr = document.getElementById('valor').value.replace(/\./g, '').replace(',', '.');
+            const valor = parseFloat(valorStr);
+            const vencimentoStr = document.getElementById('vencimento').value;
+            const observacoes = document.getElementById('observacoes').value;
+            const parcelada = document.getElementById('parcelada').value;
+
+            if (!/^\d{2}\/\d{2}\/\d{4}$/.test(vencimentoStr)) {
+                alert('❌ Formato de data inválido!');
+                return;
+            }
+
+            const [dia, mes, ano] = vencimentoStr.split('/').map(Number);
+            const vencimento = new Date(ano, mes - 1, dia).toISOString().split('T')[0];
+
+            const contas = obterContas();
+            contas.push({
+                id: Date.now().toString(),
+                empresa, fornecedor, tipo, numeroNF, valor, vencimento, observacoes, parcelada,
+                pago: false, data_pagamento: null, data_criacao: new Date().toISOString()
+            });
+
+            salvarContas(contas);
+            alert('✅ Conta adicionada!');
+            event.target.reset();
+            renderizarDashboard();
+        }
+
+        function abrirModalPagamento(id) {
+            const contas = obterContas();
+            const conta = contas.find(c => c.id === id);
+            if (conta) {
+                document.getElementById('pagmentoConta').value = `${conta.fornecedor} - ${conta.numeroNF}`;
+                document.getElementById('pagamentoValor').value = `R$ ${conta.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+                document.getElementById('dataPagamento').value = '';
+                document.getElementById('idContaPagamento').value = id;
+                document.getElementById('modalPagamento').style.display = 'block';
+            }
+        }
+
+        function salvarPagamento(event) {
+            event.preventDefault();
+            const id = document.getElementById('idContaPagamento').value;
+            const dataPagamentoStr = document.getElementById('dataPagamento').value;
+
+            if (!/^\d{2}\/\d{2}\/\d{4}$/.test(dataPagamentoStr)) {
+                alert('❌ Formato de data inválido!');
+                return;
+            }
+
+            const [dia, mes, ano] = dataPagamentoStr.split('/').map(Number);
+            const dataPagamento = new Date(ano, mes - 1, dia).toISOString().split('T')[0];
+
+            const contas = obterContas();
+            const conta = contas.find(c => c.id === id);
+            if (conta) {
+                conta.pago = true;
+                conta.data_pagamento = dataPagamento;
+                salvarContas(contas);
+                fecharModal('modalPagamento');
+                alert('✅ Pagamento registrado!');
+                renderizarDashboard();
+            }
+        }
+
+        function desfazerPagamento(id) {
+            if (!confirm('Desfazer pagamento?')) return;
+            const contas = obterContas();
+            const conta = contas.find(c => c.id === id);
+            if (conta) {
+                conta.pago = false;
+                conta.data_pagamento = null;
+                salvarContas(contas);
+                renderizarDashboard();
+            }
+        }
+
+        function deletarConta(id) {
+            if (!confirm('Deletar conta?')) return;
+            let contas = obterContas();
+            contas = contas.filter(c => c.id !== id);
+            salvarContas(contas);
+            alert('✅ Conta deletada!');
+            renderizarDashboard();
+            consultarContas(); // Recarrega a tabela de consulta
+        }
+
+        // ===== DASHBOARD =====
+        function renderizarDashboard() {
+            const contas = obterContas();
+            const totalAberto = contas.filter(c => !c.pago).reduce((sum, c) => sum + c.valor, 0);
+            const totalPago = contas.filter(c => c.pago).reduce((sum, c) => sum + c.valor, 0);
+
+            document.getElementById('totalContas').textContent = contas.length;
+            document.getElementById('totalAberto').textContent = `R$ ${totalAberto.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+            document.getElementById('totalPago').textContent = `R$ ${totalPago.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+
+            const hoje = new Date();
+            const dentro15 = new Date(hoje.getTime() + 15 * 24 * 60 * 60 * 1000);
+            const proximos = contas.filter(c => {
+                const data = new Date(c.vencimento + 'T00:00:00');
+                return data >= hoje && data <= dentro15 && !c.pago;
+            });
+
+            const corpo = document.getElementById('corpoProximos');
+            if (proximos.length === 0) {
+                corpo.innerHTML = '<tr><td colspan="5" class="no-data">Nenhuma</td></tr>';
+            } else {
+                corpo.innerHTML = proximos.map(c => {
+                    const vencimento = new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR');
+                    return `<tr>
+                        <td>${vencimento}</td>
+                        <td>${c.fornecedor}</td>
+                        <td>${c.tipo}</td>
+                        <td class="currency">R$ ${c.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td><span class="status-pendente">⏳ Pendente</span></td>
+                    </tr>`;
+                }).join('');
+            }
+        }
+
+        // ===== CONSULTAR =====
+        function consultarContas() {
+            const dataDE = document.getElementById('filtroDataDe').value;
+            const dataATE = document.getElementById('filtroDataAte').value;
+            const status = document.getElementById('filtroStatus').value;
+
+            let contas = obterContas();
+
+            if (dataDE && /^\d{2}\/\d{2}\/\d{4}$/.test(dataDE)) {
+                const [d, m, a] = dataDE.split('/').map(Number);
+                const de = new Date(a, m - 1, d);
+                contas = contas.filter(c => new Date(c.vencimento) >= de);
+            }
+
+            if (dataATE && /^\d{2}\/\d{2}\/\d{4}$/.test(dataATE)) {
+                const [d, m, a] = dataATE.split('/').map(Number);
+                const ate = new Date(a, m - 1, d);
+                contas = contas.filter(c => new Date(c.vencimento) <= ate);
+            }
+
+            if (status === 'pago') contas = contas.filter(c => c.pago);
+            if (status === 'pendente') contas = contas.filter(c => !c.pago);
+
+            const corpo = document.getElementById('corpoContas');
+            if (contas.length === 0) {
+                corpo.innerHTML = '<tr><td colspan="8" class="no-data">Nenhuma conta</td></tr>';
+                return;
+            }
+
+            const total = contas.reduce((sum, c) => sum + c.valor, 0);
+            corpo.innerHTML = contas.map(c => {
+                const vencimento = new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR');
+                const dataPago = c.data_pagamento ? new Date(c.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+                const statusClass = c.pago ? 'status-pago' : 'status-pendente';
+                const statusText = c.pago ? '✓ Pago' : '⏳ Pendente';
+                const parcelas = c.parcelada === 'sim' ? '✓' : '-';
+                return `<tr>
+                    <td>${vencimento}</td>
+                    <td>${c.fornecedor}</td>
+                    <td>${c.tipo}</td>
+                    <td>${c.numeroNF}</td>
+                    <td class="currency">R$ ${c.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                    <td>${parcelas}</td>
+                    <td><span class="${statusClass}">${statusText}</span></td>
+                    <td>
+                        ${!c.pago ? `<button class="btn-small btn-pagar" onclick="abrirModalPagamento('${c.id}')">Pagar</button>` : `<button class="btn-small btn-delete" onclick="desfazerPagamento('${c.id}')">Desfazer</button>`}
+                        <button class="btn-small btn-delete" onclick="deletarConta('${c.id}')">Del</button>
+                    </td>
+                </tr>`;
+            }).join('') + `<tr class="total-row"><td colspan="4">TOTAL</td><td class="currency">R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td><td colspan="3"></td></tr>`;
+        }
+
+        // ===== RELATÓRIOS =====
+        function gerarRelatorio(tipo) {
+            let contas = obterContas();
+            const dataDE = document.getElementById('relDataDe').value;
+            const dataATE = document.getElementById('relDataAte').value;
+
+            if (tipo === 'pagar') {
+                contas = contas.filter(c => !c.pago);
+            } else {
+                contas = contas.filter(c => c.pago);
+            }
+
+            if (dataDE && /^\d{2}\/\d{2}\/\d{4}$/.test(dataDE)) {
+                const [d, m, a] = dataDE.split('/').map(Number);
+                const de = new Date(a, m - 1, d);
+                contas = contas.filter(c => new Date(c.vencimento) >= de);
+            }
+
+            if (dataATE && /^\d{2}\/\d{2}\/\d{4}$/.test(dataATE)) {
+                const [d, m, a] = dataATE.split('/').map(Number);
+                const ate = new Date(a, m - 1, d);
+                contas = contas.filter(c => new Date(c.vencimento) <= ate);
+            }
+
+            const corpoId = tipo === 'pagar' ? 'corpoRelatorioAPagar' : 'corpoRelatorioPago';
+            const corpo = document.getElementById(corpoId);
+
+            if (contas.length === 0) {
+                corpo.innerHTML = tipo === 'pagar' ? '<tr><td colspan="6" class="no-data">Nenhuma</td></tr>' : '<tr><td colspan="7" class="no-data">Nenhuma</td></tr>';
+                return;
+            }
+
+            const total = contas.reduce((sum, c) => sum + c.valor, 0);
+
+            if (tipo === 'pagar') {
+                corpo.innerHTML = contas.map(c => {
+                    const vencimento = new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR');
+                    const parcelas = c.parcelada === 'sim' ? '✓' : '-';
+                    return `<tr>
+                        <td>${vencimento}</td>
+                        <td>${c.fornecedor}</td>
+                        <td>${c.tipo}</td>
+                        <td>${c.numeroNF}</td>
+                        <td class="currency">R$ ${c.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>${parcelas}</td>
+                    </tr>`;
+                }).join('') + `<tr class="total-row"><td colspan="4">TOTAL</td><td class="currency">R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td><td></td></tr>`;
+            } else {
+                corpo.innerHTML = contas.map(c => {
+                    const vencimento = new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR');
+                    const dataPago = c.data_pagamento ? new Date(c.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+                    const parcelas = c.parcelada === 'sim' ? '✓' : '-';
+                    return `<tr>
+                        <td>${vencimento}</td>
+                        <td>${c.fornecedor}</td>
+                        <td>${c.tipo}</td>
+                        <td>${c.numeroNF}</td>
+                        <td class="currency">R$ ${c.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                        <td>${dataPago}</td>
+                        <td>${parcelas}</td>
+                    </tr>`;
+                }).join('') + `<tr class="total-row"><td colspan="5">TOTAL</td><td class="currency">R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td><td></td></tr>`;
+            }
+
+            window.relatorioAtual = { tipo, contas, total };
+        }
+
+        function imprimirRelatorio(tipo) {
+            if (!window.relatorioAtual || window.relatorioAtual.tipo !== tipo) {
+                alert('⚠️ Primeiro gere o relatório!');
+                return;
+            }
+
+            const { contas, total } = window.relatorioAtual;
+            let html = `<html><head><title>Relatório - LB Florestal</title><style>
+                body { font-family: Arial, sans-serif; margin: 20px; }
+                table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+                th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+                th { background: #667eea; color: white; }
+                .total-row { font-weight: bold; background: #f0f0f0; }
+                h1 { text-align: center; }
+                .data { text-align: center; color: #666; margin-bottom: 20px; }
+                .currency { text-align: right; }
+            </style></head><body>
+                <h1>💼 LB Florestal - Relatório de Contas</h1>
+                <div class="data">Emitido em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}</div>
+                <h2>${tipo === 'pagar' ? 'CONTAS A PAGAR' : 'CONTAS PAGAS'}</h2>
+                <table>
+                    <thead><tr>
+                        <th>Vencimento</th>
+                        <th>Fornecedor</th>
+                        <th>Tipo</th>
+                        <th>NF</th>
+                        <th>Valor</th>
+                        ${tipo === 'pago' ? '<th>Pago em</th>' : ''}
+                        <th>Parcelas</th>
+                    </tr></thead>
+                    <tbody>`;
+
+            contas.forEach(c => {
+                const vencimento = new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR');
+                const valor = c.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2});
+                const parcelas = c.parcelada === 'sim' ? '✓' : '-';
+                const dataPago = tipo === 'pago' && c.data_pagamento ? new Date(c.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+                
+                html += `<tr>
+                    <td>${vencimento}</td>
+                    <td>${c.fornecedor}</td>
+                    <td>${c.tipo}</td>
+                    <td>${c.numeroNF}</td>
+                    <td class="currency">R$ ${valor}</td>
+                    ${tipo === 'pago' ? `<td>${dataPago}</td>` : ''}
+                    <td>${parcelas}</td>
+                </tr>`;
+            });
+
+            html += `<tr class="total-row">
+                <td colspan="${tipo === 'pago' ? '5' : '4'}">TOTAL</td>
+                <td class="currency">R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                <td colspan="${tipo === 'pago' ? '1' : '2'}"></td>
+            </tr></tbody></table></body></html>`;
+
+            const janela = window.open('', '', 'width=1000,height=600');
+            janela.document.write(html);
+            janela.document.close();
+            setTimeout(() => janela.print(), 500);
+        }
+
+        function gerarPDF(tipo) {
+            if (!window.relatorioAtual || window.relatorioAtual.tipo !== tipo) {
+                alert('⚠️ Primeiro gere o relatório!');
+                return;
+            }
+
+            const { contas, total } = window.relatorioAtual;
+            const linhas = contas.map(c => {
+                const vencimento = new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR');
+                const valor = `R$ ${c.valor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`;
+                const parcelas = c.parcelada === 'sim' ? '✓' : '-';
+                
+                if (tipo === 'pago') {
+                    const dataPago = c.data_pagamento ? new Date(c.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR') : '-';
+                    return [vencimento, c.fornecedor, c.tipo, c.numeroNF, valor, dataPago, parcelas];
+                } else {
+                    return [vencimento, c.fornecedor, c.tipo, c.numeroNF, valor, parcelas];
+                }
+            });
+
+            const docDef = {
+                content: [
+                    { text: '💼 LB FLORESTAL - RELATÓRIO DE CONTAS', style: 'header' },
+                    { text: `Emitido em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, style: 'subheader' },
+                    { text: tipo === 'pagar' ? 'CONTAS A PAGAR' : 'CONTAS PAGAS', style: 'title' },
+                    {
+                        table: {
+                            headerRows: 1,
+                            widths: tipo === 'pago' ? ['12%', '20%', '12%', '10%', '15%', '12%', '9%'] : ['12%', '20%', '12%', '10%', '15%', '11%'],
+                            body: [
+                                [
+                                    { text: 'Vencimento', style: 'tableHeader' },
+                                    { text: 'Fornecedor', style: 'tableHeader' },
+                                    { text: 'Tipo', style: 'tableHeader' },
+                                    { text: 'NF', style: 'tableHeader' },
+                                    { text: 'Valor', style: 'tableHeader' },
+                                    ...(tipo === 'pago' ? [{ text: 'Pago em', style: 'tableHeader' }] : []),
+                                    { text: 'Parcelas', style: 'tableHeader' }
+                                ],
+                                ...linhas,
+                                [
+                                    { text: 'TOTAL', colSpan: tipo === 'pago' ? 5 : 4, style: 'tableFooter' },
+                                    ...(tipo === 'pago' ? [{}, {}] : [{}]),
+                                    { text: `R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}`, style: 'tableFooter' },
+                                    {}
+                                ]
+                            ]
+                        }
+                    }
+                ],
+                styles: {
+                    header: { fontSize: 16, bold: true, alignment: 'center', margin: [0, 0, 0, 10] },
+                    subheader: { fontSize: 10, alignment: 'center', margin: [0, 0, 0, 10], color: '#666' },
+                    title: { fontSize: 14, bold: true, margin: [0, 10, 0, 10] },
+                    tableHeader: { bold: true, color: 'white', fillColor: '#667eea', alignment: 'center' },
+                    tableFooter: { bold: true, fillColor: '#f0f0f0', alignment: 'right' }
+                }
+            };
+
+            pdfMake.createPdf(docDef).download(`relatorio_${tipo}_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.pdf`);
+        }
+
+        // ===== FORNECEDORES E EMPRESAS =====
+        function salvarFornecedores(fornecedores) {
+            localStorage.setItem('fornecedores_lbflorestal', JSON.stringify(fornecedores));
+        }
+
+        function obterFornecedores() {
+            const dados = localStorage.getItem('fornecedores_lbflorestal');
+            return dados ? JSON.parse(dados) : [];
+        }
+
+        function adicionarFornecedor() {
+            const nome = document.getElementById('novoFornecedor').value;
+            const cnpj = document.getElementById('cnpjFornecedor').value;
+
+            if (!nome) {
+                alert('❌ Preencha o nome do fornecedor');
+                return;
+            }
+
+            const fornecedores = obterFornecedores();
+            fornecedores.push({
+                id: Date.now().toString(),
+                nome, cnpj
+            });
+
+            salvarFornecedores(fornecedores);
+            document.getElementById('novoFornecedor').value = '';
+            document.getElementById('cnpjFornecedor').value = '';
+            alert('✅ Fornecedor adicionado!');
+            renderizarFornecedores();
+        }
+
+        function deletarFornecedor(id) {
+            if (!confirm('Deletar fornecedor?')) return;
+            let fornecedores = obterFornecedores();
+            fornecedores = fornecedores.filter(f => f.id !== id);
+            salvarFornecedores(fornecedores);
+            renderizarFornecedores();
+        }
+
+        function renderizarFornecedores() {
+            const fornecedores = obterFornecedores();
+            const corpo = document.getElementById('corpoFornecedores');
+            
+            if (fornecedores.length === 0) {
+                corpo.innerHTML = '<tr><td colspan="3" class="no-data">Nenhum fornecedor cadastrado</td></tr>';
+            } else {
+                corpo.innerHTML = fornecedores.map(f => `<tr>
+                    <td>${f.nome}</td>
+                    <td>${f.cnpj || '-'}</td>
+                    <td><button class="btn-small btn-delete" onclick="deletarFornecedor('${f.id}')">Deletar</button></td>
+                </tr>`).join('');
+            }
+        }
+
+        function salvarEmpresas(empresas) {
+            localStorage.setItem('empresas_lbflorestal', JSON.stringify(empresas));
+        }
+
+        function obterEmpresas() {
+            const dados = localStorage.getItem('empresas_lbflorestal');
+            return dados ? JSON.parse(dados) : [];
+        }
+
+        function adicionarEmpresa() {
+            const nome = document.getElementById('novaEmpresa').value;
+            const cnpj = document.getElementById('cnpjEmpresa').value;
+
+            if (!nome) {
+                alert('❌ Preencha o nome da empresa');
+                return;
+            }
+
+            const empresas = obterEmpresas();
+            empresas.push({
+                id: Date.now().toString(),
+                nome, cnpj
+            });
+
+            salvarEmpresas(empresas);
+            document.getElementById('novaEmpresa').value = '';
+            document.getElementById('cnpjEmpresa').value = '';
+            alert('✅ Empresa adicionada!');
+            renderizarEmpresas();
+        }
+
+        function deletarEmpresa(id) {
+            if (!confirm('Deletar empresa?')) return;
+            let empresas = obterEmpresas();
+            empresas = empresas.filter(e => e.id !== id);
+            salvarEmpresas(empresas);
+            renderizarEmpresas();
+        }
+
+        function renderizarEmpresas() {
+            const empresas = obterEmpresas();
+            const corpo = document.getElementById('corpoEmpresas');
+            
+            if (empresas.length === 0) {
+                corpo.innerHTML = '<tr><td colspan="3" class="no-data">Nenhuma empresa cadastrada</td></tr>';
+            } else {
+                corpo.innerHTML = empresas.map(e => `<tr>
+                    <td>${e.nome}</td>
+                    <td>${e.cnpj || '-'}</td>
+                    <td><button class="btn-small btn-delete" onclick="deletarEmpresa('${e.id}')">Deletar</button></td>
+                </tr>`).join('');
+            }
+        }
+        function exportarDados() {
+            const contas = obterContas();
+            const dados = {
+                versao: '1.0',
+                data_exportacao: new Date().toISOString(),
+                contas: contas
+            };
+
+            const elemento = document.createElement('a');
+            elemento.setAttribute('href', 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(dados, null, 2)));
+            elemento.setAttribute('download', `contas_backup_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.json`);
+            elemento.style.display = 'none';
+            document.body.appendChild(elemento);
+            elemento.click();
+            document.body.removeChild(elemento);
+            alert('✅ Dados exportados com sucesso!');
+        }
+
+        function exportarExcel() {
+            const contas = obterContas();
+            const dados = contas.map(c => ({
+                'Vencimento': new Date(c.vencimento + 'T00:00:00').toLocaleDateString('pt-BR'),
+                'Fornecedor': c.fornecedor,
+                'Tipo': c.tipo,
+                'NF': c.numeroNF,
+                'Valor': c.valor,
+                'Parcelas': c.parcelada === 'sim' ? 'Sim' : 'Não',
+                'Status': c.pago ? 'Pago' : 'Pendente',
+                'Pago em': c.data_pagamento ? new Date(c.data_pagamento + 'T00:00:00').toLocaleDateString('pt-BR') : '-'
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(dados);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, 'Contas');
+            XLSX.writeFile(wb, `contas_${new Date().toLocaleDateString('pt-BR').replace(/\//g, '-')}.xlsx`);
+            alert('✅ Excel exportado!');
+        }
+
+        function importarDados() {
+            const file = document.getElementById('importFile').files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                try {
+                    if (file.name.endsWith('.json')) {
+                        const dados = JSON.parse(e.target.result);
+                        if (dados.contas && Array.isArray(dados.contas)) {
+                            const contasAtuais = obterContas();
+                            const contas = [...contasAtuais, ...dados.contas];
+                            salvarContas(contas);
+                            alert(`✅ ${dados.contas.length} conta(s) importada(s)!`);
+                            renderizarDashboard();
+                        }
+                    } else if (file.name.endsWith('.xlsx') || file.name.endsWith('.xls')) {
+                        const wb = XLSX.read(e.target.result, { type: 'binary' });
+                        const ws = wb.Sheets[wb.SheetNames[0]];
+                        const json = XLSX.utils.sheet_to_json(ws);
+                        
+                        const contasImportadas = json.map(row => ({
+                            id: Date.now().toString() + Math.random(),
+                            fornecedor: row['Fornecedor'],
+                            tipo: row['Tipo'],
+                            numeroNF: row['NF'],
+                            valor: parseFloat(String(row['Valor']).replace(',', '.')),
+                            vencimento: new Date(row['Vencimento']).toISOString().split('T')[0],
+                            parcelada: (row['Parcelas'] === 'Sim' ? 'sim' : 'não'),
+                            pago: (row['Status'] === 'Pago'),
+                            data_pagamento: row['Pago em'] && row['Pago em'] !== '-' ? new Date(row['Pago em']).toISOString().split('T')[0] : null,
+                            observacoes: '',
+                            data_criacao: new Date().toISOString()
+                        }));
+
+                        const contasAtuais = obterContas();
+                        salvarContas([...contasAtuais, ...contasImportadas]);
+                        alert(`✅ ${contasImportadas.length} conta(s) importada(s)!`);
+                        renderizarDashboard();
+                    }
+                } catch (err) {
+                    alert('❌ Erro ao importar: ' + err.message);
+                }
+                document.getElementById('importFile').value = '';
+            };
+
+            if (file.name.endsWith('.json')) {
+                reader.readAsText(file);
+            } else {
+                reader.readAsBinaryString(file);
+            }
+        }
+
+        function limparDados() {
+            if (!confirm('⚠️ CUIDADO! Isso vai deletar TODOS os dados. Tem certeza?')) return;
+            localStorage.removeItem('contas_lbflorestal');
+            alert('🗑️ Todos os dados foram deletados!');
+            renderizarDashboard();
+        }
+
+        function atualizarStatusSync() {
+            const contas = obterContas();
+            const totalContas = contas.length;
+            const totalValor = contas.reduce((sum, c) => sum + c.valor, 0);
+            
+            document.getElementById('statusDados').innerHTML = `
+                <strong>📊 Status dos Dados:</strong><br>
+                Total de contas: ${totalContas}<br>
+                Valor total: R$ ${totalValor.toLocaleString('pt-BR', {minimumFractionDigits: 2})}<br>
+                Última modificação: ${new Date().toLocaleString('pt-BR')}<br><br>
+                <strong>🔄 Como sincronizar:</strong><br>
+                1. Você exporta em JSON<br>
+                2. Envia por email/WhatsApp<br>
+                3. Colega importa<br>
+                4. Pronto! 🎉
+            `;
+        }
+
+        function fecharModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        window.onclick = (event) => {
+            if (event.target.classList.contains('modal')) event.target.style.display = 'none';
+        };
+
+        // Inicial
+        renderizarDashboard();
+    </script>
+</body>
+</html>
