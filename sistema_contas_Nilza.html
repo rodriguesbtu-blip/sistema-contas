@@ -120,6 +120,7 @@
             <button class="tab-btn" onclick="mostrarAba('relatorios')">📋 Relatórios</button>
             <button class="tab-btn" onclick="mostrarAba('fornecedores')">🏢 Fornecedores</button>
             <button class="tab-btn" onclick="mostrarAba('empresas')">🏭 Empresas</button>
+            <button class="tab-btn" onclick="mostrarAba('arquivos')">📦 Arquivos</button>
             <button class="tab-btn" onclick="mostrarAba('sincronizar')">🔄 Sincronizar</button>
         </div>
 
@@ -407,6 +408,41 @@
                 </table>
             </div>
         </div>
+
+        <!-- ARQUIVOS -->
+        <div id="arquivos" class="tab-content">
+            <h2>📦 Arquivos de Meses</h2>
+            <div class="info-box">
+                Arquive contas do mês passado. Elas saem da visualização atual, mas continuam guardadas no histórico.
+            </div>
+            <div style="margin-bottom: 20px;">
+                <label>Selecione o mês para arquivar:</label>
+                <div class="form-row">
+                    <div class="form-group">
+                        <input type="month" id="mesArquivar" style="width: 100%;">
+                    </div>
+                    <button onclick="arquivarMes()" style="margin-top: 20px;">📦 Arquivar Mês</button>
+                </div>
+            </div>
+
+            <h3>Meses Arquivados</h3>
+            <div class="table-responsive">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Mês</th>
+                            <th>Total de Contas</th>
+                            <th>Total Valor</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="corpoArquivos">
+                        <tr><td colspan="4" class="no-data">Nenhum mês arquivado</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <div id="sincronizar" class="tab-content">
             <h2>🔄 Sincronizar Dados</h2>
             <div class="info-box">
@@ -502,6 +538,7 @@
             if (abaId === 'adicionar') atualizarSelects();
             if (abaId === 'fornecedores') renderizarFornecedores();
             if (abaId === 'empresas') renderizarEmpresas();
+            if (abaId === 'arquivos') renderizarArquivos();
         }
 
         function atualizarSelects() {
@@ -515,6 +552,92 @@
             const selectFornecedor = document.getElementById('selectFornecedor');
             selectFornecedor.innerHTML = '<option value="">Selecione...</option>' + 
                 fornecedores.map(f => `<option value="${f.nome}">${f.nome}</option>`).join('');
+        }
+
+        // ===== ARQUIVOS =====
+        function salvarArquivos(arquivos) {
+            localStorage.setItem('arquivos_lbflorestal', JSON.stringify(arquivos));
+        }
+
+        function obterArquivos() {
+            const dados = localStorage.getItem('arquivos_lbflorestal');
+            return dados ? JSON.parse(dados) : {};
+        }
+
+        function arquivarMes() {
+            const mesInput = document.getElementById('mesArquivar').value;
+            if (!mesInput) {
+                alert('❌ Selecione um mês!');
+                return;
+            }
+
+            const [ano, mes] = mesInput.split('-').map(Number);
+            const contas = obterContas();
+            
+            // Filtrar contas do mês selecionado que foram pagas
+            const contasParaArquivar = contas.filter(c => {
+                const dataVencimento = new Date(c.vencimento + 'T00:00:00');
+                return dataVencimento.getFullYear() === ano && 
+                       (dataVencimento.getMonth() + 1) === mes &&
+                       c.pago === true;
+            });
+
+            if (contasParaArquivar.length === 0) {
+                alert('❌ Nenhuma conta paga neste mês para arquivar!');
+                return;
+            }
+
+            const arquivos = obterArquivos();
+            const chave = `${ano}-${String(mes).padStart(2, '0')}`;
+            
+            arquivos[chave] = contasParaArquivar;
+            salvarArquivos(arquivos);
+
+            // Remover contas arquivadas das contas ativas
+            const contasRestantes = contas.filter(c => !contasParaArquivar.includes(c));
+            salvarContas(contasRestantes);
+
+            alert(`✅ ${contasParaArquivar.length} conta(s) arquivada(s)!`);
+            renderizarArquivos();
+            renderizarDashboard();
+        }
+
+        function renderizarArquivos() {
+            const arquivos = obterArquivos();
+            const corpo = document.getElementById('corpoArquivos');
+            
+            if (Object.keys(arquivos).length === 0) {
+                corpo.innerHTML = '<tr><td colspan="4" class="no-data">Nenhum mês arquivado</td></tr>';
+                return;
+            }
+
+            corpo.innerHTML = Object.entries(arquivos).reverse().map(([mes, contas]) => {
+                const total = contas.reduce((sum, c) => sum + c.valor, 0);
+                const mesFormatado = new Date(mes + '-15').toLocaleDateString('pt-BR', {month: 'long', year: 'numeric'});
+                return `<tr>
+                    <td>${mesFormatado}</td>
+                    <td>${contas.length}</td>
+                    <td class="currency">R$ ${total.toLocaleString('pt-BR', {minimumFractionDigits: 2})}</td>
+                    <td><button class="btn-small btn-pagar" onclick="restaurarMes('${mes}')">Restaurar</button></td>
+                </tr>`;
+            }).join('');
+        }
+
+        function restaurarMes(mes) {
+            if (!confirm('Restaurar este mês? As contas voltarão à lista ativa.')) return;
+            
+            const arquivos = obterArquivos();
+            const contas = obterContas();
+            
+            contas.push(...arquivos[mes]);
+            salvarContas(contas);
+            
+            delete arquivos[mes];
+            salvarArquivos(arquivos);
+            
+            alert('✅ Mês restaurado!');
+            renderizarArquivos();
+            renderizarDashboard();
         }
 
         // ===== CONTAS =====
@@ -538,17 +661,48 @@
             }
 
             const [dia, mes, ano] = vencimentoStr.split('/').map(Number);
-            const vencimento = new Date(ano, mes - 1, dia).toISOString().split('T')[0];
+            const vencimento = new Date(ano, mes - 1, dia);
 
             const contas = obterContas();
-            contas.push({
-                id: Date.now().toString(),
-                empresa, fornecedor, tipo, numeroNF, valor, vencimento, observacoes, parcelada, numeroParcelas,
-                pago: false, data_pagamento: null, data_criacao: new Date().toISOString()
-            });
+            const baseId = Date.now().toString();
+
+            if (parcelada === 'sim' && numeroParcelas > 1) {
+                // Criar múltiplas contas com vencimentos escalonados
+                const valorParcela = valor / numeroParcelas;
+                
+                for (let i = 0; i < numeroParcelas; i++) {
+                    const dataVencimento = new Date(vencimento);
+                    dataVencimento.setMonth(dataVencimento.getMonth() + i);
+                    
+                    contas.push({
+                        id: baseId + '_' + (i + 1),
+                        empresa, fornecedor, tipo, numeroNF, 
+                        valor: Math.round(valorParcela * 100) / 100, 
+                        vencimento: dataVencimento.toISOString().split('T')[0], 
+                        observacoes: `${observacoes} (Parcela ${i + 1}/${numeroParcelas})`, 
+                        parcelada: 'sim', 
+                        numeroParcelas: numeroParcelas,
+                        parcelaNumero: i + 1,
+                        pago: false, 
+                        data_pagamento: null, 
+                        data_criacao: new Date().toISOString()
+                    });
+                }
+            } else {
+                // Conta normal ou parcelada (não dividir)
+                contas.push({
+                    id: baseId,
+                    empresa, fornecedor, tipo, numeroNF, valor, 
+                    vencimento: vencimento.toISOString().split('T')[0], 
+                    observacoes, parcelada, numeroParcelas,
+                    pago: false, 
+                    data_pagamento: null, 
+                    data_criacao: new Date().toISOString()
+                });
+            }
 
             salvarContas(contas);
-            alert('✅ Conta adicionada!');
+            alert('✅ Conta adicionada!' + (parcelada === 'sim' && numeroParcelas > 1 ? ` (${numeroParcelas} parcelas criadas)` : ''));
             event.target.reset();
             renderizarDashboard();
         }
